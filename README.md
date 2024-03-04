@@ -13,6 +13,5 @@ Para iniciar GAZEBO
 
 Para el paquete de listener (otra terminal con el GAZEBO abierto):
 - export TURTLEBOT3_MODEL=waffle
-- catkin_make (compila los paquetes)
-- source devel/setup.bash (dos veces si da error)'
+- source devel/setup.bash (dos veces si da error)
 - rosrun listener listener

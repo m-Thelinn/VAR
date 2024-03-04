@@ -6,22 +6,35 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/filters/voxel_grid.h>
+#include <pcl/keypoints/iss_3d.h>
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr visu_pc (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-void simpleVis ()
-{
-  	pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
+void simpleVis (){
+  	pcl::visualization::CloudViewer viewer ("Cloud Viewer");
 	while(!viewer.wasStopped())
 	{
 	  viewer.showCloud (visu_pc);
 	  boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 	}
-
 }
 
-void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
-{
+void getKeypoints(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr& cloud_filtered){
+    pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss;
+
+    iss.setInputCloud(cloud_filtered);
+    iss.setSalientRadius(5); //radio saliente
+    iss.setNonMaxRadius(5); //radio no maximo
+    iss.setThreshold21(0.5); //umbral21
+    iss.setThreshold32(0.5); //umbral32
+    iss.setMinNeighbors(1); //numero minimo de vecinos
+    iss.compute(*keypoints);
+
+    cout << "Keypoints detectados: " << keypoints->size() << endl;
+}
+
+void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -35,6 +48,8 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg)
 	cout << "Puntos tras VG: " << cloud_filtered->size() << endl;
 
 	visu_pc = cloud_filtered;
+
+	getKeypoints(cloud_filtered);
 }
 
 int main(int argc, char** argv)

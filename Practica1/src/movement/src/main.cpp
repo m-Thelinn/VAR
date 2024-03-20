@@ -42,12 +42,12 @@ class Movement{
 
           case 'a':
             base_cmd.linear.x = 0;
-            base_cmd.angular.z = 0.2;
+            base_cmd.angular.z = 0.1;
             break;
 
           case 'd':
             base_cmd.linear.x = 0;
-            base_cmd.angular.z = -0.2;
+            base_cmd.angular.z = -0.1;
             break;
 
           case 's':

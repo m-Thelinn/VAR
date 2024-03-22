@@ -68,6 +68,9 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "core": "cpp",
+        "numericaldiff": "cpp",
+        "csignal": "cpp"
     }
 }

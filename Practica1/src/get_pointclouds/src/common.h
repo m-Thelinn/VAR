@@ -1,5 +1,3 @@
-#pragma once
-
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -38,5 +36,3 @@
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/keypoints/harris_3d.h>
 #include <pcl/features/cvfh.h>
-#include <Eigen/Core>
-#include <Eigen/Geometry>

@@ -6,6 +6,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr last_keypoints(new pcl::PointCloud<pcl::P
 pcl::PointCloud<pcl::Normal>::Ptr last_normals(new pcl::PointCloud<pcl::Normal>());
 pcl::PointCloud<pcl::FPFHSignature33>::Ptr last_descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> transformed_clouds;
 
 Eigen::Matrix4f transformation;
 double resolution;
@@ -110,9 +111,6 @@ void iterative_closest_point(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &
     pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_transformed(new pcl::PointCloud<pcl::PointXYZRGB>());
     
-    // Aplicar la transformación obtenida por RANSAC
-    pcl::transformPointCloud(*cloud, *cloud_transformed, transformation);
-    
     icp.setInputSource(cloud_transformed);
     icp.setInputTarget(last_filtered);
     icp.setMaxCorrespondenceDistance(0.05);
@@ -123,7 +121,7 @@ void iterative_closest_point(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &
     icp.align(aligned_cloud);
 
     if(icp.hasConverged()){
-        transformation = icp.getFinalTransformation() * transformation; // Actualizar la transformación acumulada
+        transformation = icp.getFinalTransformation(); // Actualizar la transformación acumulada
     }
 
 	std::cout << "ICP Score: " << icp.getFitnessScore() << "\n";
@@ -166,19 +164,19 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	//Matching
 	if(!last_filtered->empty()){ //no podemos hacer matching con solo 1 nube, necesitamos 2
 		pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
-		//Ransac
-		transformation = ransac(cloud_filtered, correspondences); //obtenemos correspondencias
+		transformation = ransac(cloud_filtered, correspondences);
 		//ICP
 		iterative_closest_point(cloud_filtered);
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-		pcl::transformPointCloud(*cloud_original, *transformed_cloud, transformation);
+		pcl::transformPointCloud(*cloud_filtered, *transformed_cloud, transformation);
+
+		*final_cloud += *transformed_cloud;
 	}	
 
 	*last_filtered  = *cloud_filtered;
 	*last_keypoints = *keypoints;
 	*last_descriptors = *descriptors;
 	*last_normals = *normals;
-	*final_cloud += *cloud_filtered;
 }
 
 void simpleVis(){
@@ -195,7 +193,6 @@ int main(int argc, char** argv){
   ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth/points", 1, callback);
 
   boost::thread t(simpleVis);
-  transformation.setIdentity();
 
   while(ros::ok()){
 	ros::spinOnce();

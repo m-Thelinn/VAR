@@ -1,12 +1,13 @@
 #include "common.h"
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr last_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr last_keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 pcl::PointCloud<pcl::Normal>::Ptr last_normals(new pcl::PointCloud<pcl::Normal>());
 pcl::PointCloud<pcl::FPFHSignature33>::Ptr last_descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
+pcl::CorrespondencesPtr estimateCorrespondences(new pcl::Correspondences);
 std::vector<pcl::PointCloud<pcl::PointXYZRGB>::Ptr> transformed_clouds;
+
 
 Eigen::Matrix4f transformation;
 double resolution;
@@ -53,11 +54,11 @@ void estimate_normals(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud, 
 void iss_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& cloud, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& keypoints) {
     pcl::ISSKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZRGB> iss_detector;
 
-    iss_detector.setSalientRadius(6 * resolution);
-    iss_detector.setNonMaxRadius(4 * resolution);
-    iss_detector.setThreshold21(0.65);
-    iss_detector.setThreshold32(0.5);
-    iss_detector.setMinNeighbors(7);
+    iss_detector.setSalientRadius(7 * resolution);
+    iss_detector.setNonMaxRadius(3 * resolution);
+    iss_detector.setThreshold21(0.7);
+    iss_detector.setThreshold32(0.4);
+    iss_detector.setMinNeighbors(3);
     iss_detector.setNumberOfThreads(4);
     iss_detector.setInputCloud(cloud);
 
@@ -82,24 +83,26 @@ void FPFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoin
 	fpfh.setInputCloud(keypoints);
 	fpfh.setInputNormals(normals);
 	fpfh.setSearchMethod(tree);
-	fpfh.setRadiusSearch(0.09);
+	fpfh.setRadiusSearch(0.1);
 	fpfh.compute(*descriptors);
 
 	cout << "Number of descriptors with FPFH: " << descriptors->size() << "\n";	
 }
 
-Eigen::Matrix4f ransac(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud, pcl::CorrespondencesPtr bestCorrespondences){
-	pcl::CorrespondencesPtr estimateCorrespondences(new pcl::Correspondences);
-	pcl::registration::CorrespondenceEstimation<pcl::PointXYZRGB, pcl::PointXYZRGB> corr_est;
-	corr_est.setInputSource(cloud);
-	corr_est.setInputTarget(last_filtered);
-	corr_est.determineCorrespondences(*estimateCorrespondences);
+void matching(pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptors){
+	pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> corr;
+	corr.setInputSource(descriptors);
+	corr.setInputTarget(last_descriptors);
+	corr.determineCorrespondences(*estimateCorrespondences);
+	std::cout << "Numero de correspondencias encontradas: " << estimateCorrespondences->size() << std::endl;
+}
 
+Eigen::Matrix4f ransac(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::CorrespondencesPtr bestCorrespondences){
 	//RANSAC
 	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> crsc;
-    crsc.setInputSource(cloud);
-    crsc.setInputTarget(last_filtered);
-    crsc.setInlierThreshold(0.025); 
+    crsc.setInputSource(keypoints);
+    crsc.setInputTarget(last_keypoints);
+    crsc.setInlierThreshold(0.25);
     crsc.setMaximumIterations(1000);
     crsc.setRefineModel(true);
     crsc.setInputCorrespondences(estimateCorrespondences);
@@ -113,7 +116,7 @@ void iterative_closest_point(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &
     
     icp.setInputSource(cloud_transformed);
     icp.setInputTarget(last_filtered);
-    icp.setMaxCorrespondenceDistance(0.05);
+    icp.setMaxCorrespondenceDistance(0.1);
     icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-8);
     icp.setEuclideanFitnessEpsilon(1);
@@ -121,7 +124,7 @@ void iterative_closest_point(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &
     icp.align(aligned_cloud);
 
     if(icp.hasConverged()){
-        transformation = icp.getFinalTransformation(); // Actualizar la transformación acumulada
+        transformation = icp.getFinalTransformation();
     }
 
 	std::cout << "ICP Score: " << icp.getFitnessScore() << "\n";
@@ -130,9 +133,10 @@ void iterative_closest_point(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &
 
 void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_original(new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
+	pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
 
 	cout << "Puntos capturados: " << cloud->size() << endl;
 
@@ -153,22 +157,23 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	estimate_normals(cloud_filtered, normals);
 
 	//Keypoints
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 	iss_keypoints(cloud_filtered, keypoints);
 	*cloud_filtered += *keypoints;
 
 	//Descriptores
-	pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptors(new pcl::PointCloud<pcl::FPFHSignature33>());
 	FPFH_descriptors(keypoints, descriptors);
 
 	//Matching
 	if(!last_filtered->empty()){ //no podemos hacer matching con solo 1 nube, necesitamos 2
+		matching(descriptors);
+
 		pcl::CorrespondencesPtr correspondences(new pcl::Correspondences());
-		transformation = ransac(cloud_filtered, correspondences);
+		transformation = ransac(keypoints, correspondences);
 		//ICP
-		iterative_closest_point(cloud_filtered);
+		//iterative_closest_point(cloud_filtered);
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
 		pcl::transformPointCloud(*cloud_filtered, *transformed_cloud, transformation);
+		std::cout << "Transformation matrix: \n" << transformation << "\n";
 
 		*final_cloud += *transformed_cloud;
 	}	

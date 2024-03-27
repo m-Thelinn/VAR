@@ -66,5 +66,6 @@
         "core": "cpp",
         "numericaldiff": "cpp",
         "codecvt": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/home/thelinn/Escritorio/VAR/Practica1/src/turtlebot3_simulations/turtlebot3_fake"
 }

@@ -64,13 +64,13 @@ double obtenerResolucion(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube
 	return res;
 }
 
-void obtenerNormales(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_input, pcl::PointCloud<pcl::Normal>::Ptr normales, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& original){
+void obtenerNormales(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_input, pcl::PointCloud<pcl::Normal>::Ptr normales){
     pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>);
 
 	ne.setInputCloud(nube_input);
 	ne.setSearchMethod(kdtree);
-	ne.setRadiusSearch(0.15f);
+	ne.setRadiusSearch(0.15);
 	ne.setSearchSurface(nube_input);
 	ne.compute(*normales);
 
@@ -86,7 +86,6 @@ void ISS_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_input
     iss.setThreshold21(0.95);
     iss.setThreshold32(0.95);
     iss.setMinNeighbors(4);
-    iss.setNumberOfThreads(4);
 	iss.compute(*keypoints);
 
     for(size_t i = 0; i < keypoints->size(); ++i){ //pintar de verde
@@ -106,7 +105,7 @@ void SIFT_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_inpu
 	sift.setInputCloud(nube_input);
 
 	sift.setSearchMethod(kdtree);
-	sift.setScales(0.01f, 1, 1);
+	sift.setScales(0.01, 3, 4);
 	sift.setMinimumContrast(0.001f);
 	sift.compute(resultado);
 	copyPointCloud(resultado, *keypoints);
@@ -125,7 +124,7 @@ void Harris_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_in
 	pcl::PointCloud<pcl::PointXYZI> resultado;
 
 	harris.setNonMaxSupression(true);
-	harris.setThreshold(1e-12);
+	harris.setThreshold(1e-9);
 	harris.setInputCloud(nube_input);
 	harris.compute(resultado);
 	copyPointCloud(resultado, *keypoints);
@@ -139,12 +138,12 @@ void Harris_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_in
 	std::cout << "Numero de keypoints: " << keypoints->size() << "\n";
 }
 
-void PFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptores){
+void PFH_descriptores(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptores){
 	pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125> pfh;
 	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>());
 
-	obtenerNormales(keypoints, normales, nube_input);
+	obtenerNormales(keypoints, normales);
 	pfh.setInputCloud(keypoints);
 	pfh.setInputNormals(normales);
 	pfh.setSearchMethod(kdtree);
@@ -154,12 +153,12 @@ void PFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_inp
 	cout << "Numero de descriptores PFH: " << descriptores->size() << "\n";	
 }
 
-void FPFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
+void FPFH_descriptores(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
 	pcl::FPFHEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::FPFHSignature33> fpfh;
 	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>());
 
-	obtenerNormales(keypoints, normales, nube_input);
+	obtenerNormales(keypoints, normales);
 	fpfh.setInputCloud(keypoints);
 	fpfh.setInputNormals(normales);
 	fpfh.setSearchMethod(kdtree);
@@ -169,17 +168,23 @@ void FPFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_in
 	cout << "Numero de descriptores FPFH: " << descriptores->size() << "\n";	
 }
 
-void CVFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::VFHSignature308>::Ptr& descriptores){
+//--------------------------------------------
+//			NO FUNCIONA
+//--------------------------------------------
+//Se queda calculando infinitamente, sin importar que parametros le introduzcas
+/*void CVFH_descriptores(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::VFHSignature308>::Ptr& descriptores){
 	pcl::CVFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::VFHSignature308> cvfh;
 	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree (new pcl::search::KdTree<pcl::PointXYZRGB>());
 
-	obtenerNormales(keypoints, normales, nube_input);
+	obtenerNormales(nube_input, normales);
+
 	cvfh.setInputCloud(keypoints);
 	cvfh.setInputNormals(normales);
-	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>());
-	cvfh.setSearchMethod(tree);
-	cvfh.setEPSAngleThreshold(1.0);
-	cvfh.setCurvatureThreshold(2.0);
+	cvfh.setSearchMethod(kdtree);
+
+	cvfh.setEPSAngleThreshold(0.0001);
+	cvfh.setCurvatureThreshold(0.00001);
 	cvfh.setNormalizeBins(false);
  
 	cvfh.compute(*descriptores);	
@@ -187,20 +192,28 @@ void CVFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_in
 	cout << "Numero de descriptores CVFH: " << descriptores->size() << "\n";	
 }
 
-void SHOT_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::SHOT352>::Ptr &descriptores){
+
+
+//[pcl::SHOTEstimation::initCompute] The number of points in the input dataset (1450423) differs from the number of points in the dataset containing the normals (5406)!
+//[pcl::SHOTEstimation::computeFeature] The local reference frame is not valid! Aborting description of point with index 3374
+//get_pointclouds_node: /build/pcl-gWGA5r/pcl-1.10.0+dfsg/kdtree/include/pcl/kdtree/impl/kdtree_flann.hpp:138: int pcl::KdTreeFLANN<PointT, Dist>::nearestKSearch(const PointT&, int, std::vector<int>&, std::vector<float>&) const [with PointT = pcl::SHOT352; Dist = flann::L2_Simple<float>]: Assertion `point_representation_->isValid (point) && "Invalid (NaN, Inf) point coordinates given to nearestKSearch!"' failed.
+
+void SHOT_descriptores(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::SHOT352>::Ptr &descriptores){
 	pcl::SHOTEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT352> shot;
 	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
 
-	obtenerNormales(keypoints, normales, nube_input);
+	obtenerNormales(keypoints, normales);
 
 	shot.setRadiusSearch(0.05);
 	shot.setInputCloud(keypoints);
 	shot.setInputNormals(normales);
-	shot.setSearchSurface(nube_input);
 	shot.compute(*descriptores);
 
 	cout << "Numero de descriptores SHOT: " << descriptores->size() << "\n";	
-}
+}*/
+
+//--------------------------------------------
+
 
 //void Matching(pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptores){
 void Matching(pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
@@ -216,7 +229,6 @@ void Matching(pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
 	std::cout << "Numero de correspondencias encontradas: " << correspondenciaEstimada->size() << std::endl;
 }
 
-
 Eigen::Matrix4f RANSAC(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::CorrespondencesPtr mejorCorrespondencia){
 	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> crsc;
 
@@ -224,27 +236,28 @@ Eigen::Matrix4f RANSAC(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoi
     crsc.setInputTarget(nube_key_anterior);
 
 	crsc.setRefineModel(true);
-    crsc.setInlierThreshold(0.5);
+    crsc.setInlierThreshold(0.50);
     crsc.setMaximumIterations(10000);
     crsc.setInputCorrespondences(correspondenciaEstimada);
 	crsc.getCorrespondences(*mejorCorrespondencia);
 	return crsc.getBestTransformation();
 }
 
-void ICP(){
+void ICP(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input){
     pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB> icp;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_transformada(new pcl::PointCloud<pcl::PointXYZRGB>());
     pcl::PointCloud<pcl::PointXYZRGB> nube_alineada;
 
-    icp.setInputSource(nube_transformada);
+    icp.setInputSource(nube_input);
     icp.setInputTarget(nube_filtrada_anterior);
 
-    icp.setMaxCorrespondenceDistance(10);
+    icp.setMaxCorrespondenceDistance(0.05);
     icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-8);
-    icp.setEuclideanFitnessEpsilon(1);
+    icp.setEuclideanFitnessEpsilon(1e-6);
     icp.align(nube_alineada);
-    transformacion_actual = icp.getFinalTransformation();
+	transformacion_actual = icp.getFinalTransformation();
+
+	std::cout << "ICP Fitness Score: " << icp.getFitnessScore() << "\n";
 }
 
 void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
@@ -254,8 +267,8 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
 	//pcl::PointCloud<pcl::PFHSignature125>::Ptr descriptores(new pcl::PointCloud<pcl::PFHSignature125>());
 	pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptores(new pcl::PointCloud<pcl::FPFHSignature33>());
-	//pcl::PointCloud<pcl::VFHSignature308>::Ptr descriptores(new pcl::PointCloud<pcl::VFHSignature308>());
-	//pcl::PointCloud<pcl::SHOT352>::Ptr descriptores(new pcl::PointCloud<pcl::SHOT352>());
+	//pcl::PointCloud<pcl::VFHSignature308>::Ptr descriptores(new pcl::PointCloud<pcl::VFHSignature308>()); //no conseguido
+	//pcl::PointCloud<pcl::SHOT352>::Ptr descriptores(new pcl::PointCloud<pcl::SHOT352>()); //no conseguido
 
 	cout << "Puntos capturados: " << nube_capturada->size() << endl;
 
@@ -266,13 +279,13 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	//VoxelGrid
 	pcl::VoxelGrid<pcl::PointXYZRGB> voxelGrid;
 	voxelGrid.setInputCloud(nube_capturada);
-	voxelGrid.setLeafSize (0.01f, 0.01f, 0.01f);
+	voxelGrid.setLeafSize (0.01, 0.01, 0.01);
 	voxelGrid.filter(*nube_filtrada);
 	cout << "Puntos tras VG: " << nube_filtrada->size() << endl;
 
 	//Normales
 	resolucionNube = obtenerResolucion(nube_filtrada);
-	obtenerNormales(nube_filtrada, normales, nube_capturada);
+	obtenerNormales(nube_filtrada, normales);
 
 	//Keypoints
 	auto start = std::chrono::high_resolution_clock::now();
@@ -286,10 +299,10 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 
 	//Descriptores
 	start = std::chrono::high_resolution_clock::now();
-	//PFH_descriptors(nube_capturada, keypoints, descriptores);
-	FPFH_descriptors(nube_capturada, keypoints, descriptores);
-	//CVFH_descriptors(nube_capturada, keypoints, descriptores);
-	//SHOT_descriptors(nube_capturada, keypoints, descriptores);
+	//PFH_descriptores(nube_capturada, keypoints, descriptores);
+	FPFH_descriptores(nube_capturada, keypoints, descriptores);
+	//CVFH_descriptores(nube_capturada, keypoints, descriptores);
+	//SHOT_descriptores(keypoints, descriptores);
 	end = std::chrono::high_resolution_clock::now();
 	duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 	std::cout << "Tiempo de ejecución descriptores: " << duration.count() / 1000.0 << " segundos" << std::endl;
@@ -309,11 +322,17 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 		end = std::chrono::high_resolution_clock::now();
 		duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 		std::cout << "Tiempo de ejecución RANSAC: " << duration.count() / 1000.0 << " segundos" << std::endl;
+
 		transformacion_global = transformacion_actual * transformacion_global;
 
-		ICP();
-		
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_con_transformacion(new pcl::PointCloud<pcl::PointXYZRGB>());
+		pcl::transformPointCloud(*nube_filtrada, *nube_con_transformacion, transformacion_actual);
+		start = std::chrono::high_resolution_clock::now();
+		ICP(nube_con_transformacion);
+		end = std::chrono::high_resolution_clock::now();
+		duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+		std::cout << "Tiempo de ejecución ICP: " << duration.count() / 1000.0 << " segundos" << std::endl;
+
 		pcl::transformPointCloud(*nube_filtrada, *nube_con_transformacion, transformacion_global);
 		*nube_visualizada += *nube_con_transformacion;
 	}	

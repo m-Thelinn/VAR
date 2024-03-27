@@ -12,14 +12,20 @@
 #include <pcl/keypoints/iss_3d.h>
 #include <pcl/keypoints/sift_keypoint.h>
 #include <pcl/keypoints/harris_3d.h>
+#include <pcl/features/pfh.h>
 #include <pcl/features/fpfh_omp.h>
+#include <pcl/features/cvfh.h>
+#include <pcl/features/shot_omp.h>
 #include <pcl/correspondence.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/icp.h>
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_filtrada_anterior(new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_key_anterior(new pcl::PointCloud<pcl::PointXYZRGB>());
+//pcl::PointCloud<pcl::PFHSignature125>::Ptr descriptores_anteriores(new pcl::PointCloud<pcl::PFHSignature125>());
 pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptores_anteriores(new pcl::PointCloud<pcl::FPFHSignature33>());
+//pcl::PointCloud<pcl::VFHSignature308>::Ptr descriptores_anteriores(new pcl::PointCloud<pcl::VFHSignature308>());
+//pcl::PointCloud<pcl::SHOT352>::Ptr descriptores_anteriores(new pcl::PointCloud<pcl::SHOT352>());
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_visualizada(new pcl::PointCloud<pcl::PointXYZRGB>());
 pcl::CorrespondencesPtr correspondenciaEstimada(new pcl::Correspondences);
 
@@ -79,7 +85,7 @@ void ISS_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_input
     iss.setNonMaxRadius(2.5 * resolucionNube);
     iss.setThreshold21(0.95);
     iss.setThreshold32(0.95);
-    iss.setMinNeighbors(3);
+    iss.setMinNeighbors(4);
     iss.setNumberOfThreads(4);
 	iss.compute(*keypoints);
 
@@ -100,7 +106,7 @@ void SIFT_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_inpu
 	sift.setInputCloud(nube_input);
 
 	sift.setSearchMethod(kdtree);
-	sift.setScales(0.01f, 3, 4);
+	sift.setScales(0.01f, 1, 1);
 	sift.setMinimumContrast(0.001f);
 	sift.compute(resultado);
 	copyPointCloud(resultado, *keypoints);
@@ -119,7 +125,7 @@ void Harris_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_in
 	pcl::PointCloud<pcl::PointXYZI> resultado;
 
 	harris.setNonMaxSupression(true);
-	harris.setThreshold(1e-9);
+	harris.setThreshold(1e-12);
 	harris.setInputCloud(nube_input);
 	harris.compute(resultado);
 	copyPointCloud(resultado, *keypoints);
@@ -131,6 +137,21 @@ void Harris_keypoints(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& nube_in
     }
 
 	std::cout << "Numero de keypoints: " << keypoints->size() << "\n";
+}
+
+void PFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptores){
+	pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125> pfh;
+	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTree<pcl::PointXYZRGB>());
+
+	obtenerNormales(keypoints, normales, nube_input);
+	pfh.setInputCloud(keypoints);
+	pfh.setInputNormals(normales);
+	pfh.setSearchMethod(kdtree);
+	pfh.setRadiusSearch(0.5);
+	pfh.compute(*descriptores);
+
+	cout << "Numero de descriptores PFH: " << descriptores->size() << "\n";	
 }
 
 void FPFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
@@ -148,13 +169,53 @@ void FPFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_in
 	cout << "Numero de descriptores FPFH: " << descriptores->size() << "\n";	
 }
 
+void CVFH_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::VFHSignature308>::Ptr& descriptores){
+	pcl::CVFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::VFHSignature308> cvfh;
+	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
+
+	obtenerNormales(keypoints, normales, nube_input);
+	cvfh.setInputCloud(keypoints);
+	cvfh.setInputNormals(normales);
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>());
+	cvfh.setSearchMethod(tree);
+	cvfh.setEPSAngleThreshold(1.0);
+	cvfh.setCurvatureThreshold(2.0);
+	cvfh.setNormalizeBins(false);
+ 
+	cvfh.compute(*descriptores);	
+
+	cout << "Numero de descriptores CVFH: " << descriptores->size() << "\n";	
+}
+
+void SHOT_descriptors(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &nube_input, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& keypoints, pcl::PointCloud<pcl::SHOT352>::Ptr &descriptores){
+	pcl::SHOTEstimationOMP<pcl::PointXYZRGB, pcl::Normal, pcl::SHOT352> shot;
+	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
+
+	obtenerNormales(keypoints, normales, nube_input);
+
+	shot.setRadiusSearch(0.05);
+	shot.setInputCloud(keypoints);
+	shot.setInputNormals(normales);
+	shot.setSearchSurface(nube_input);
+	shot.compute(*descriptores);
+
+	cout << "Numero de descriptores SHOT: " << descriptores->size() << "\n";	
+}
+
+//void Matching(pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptores){
 void Matching(pcl::PointCloud<pcl::FPFHSignature33>::Ptr &descriptores){
+//void Matching(pcl::PointCloud<pcl::SHOT352>::Ptr &descriptores){
+//void Matching(pcl::PointCloud<pcl::VFHSignature308>::Ptr &descriptores){
+	//pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> ce;
 	pcl::registration::CorrespondenceEstimation<pcl::FPFHSignature33, pcl::FPFHSignature33> ce;
+	//pcl::registration::CorrespondenceEstimation<pcl::VFHSignature308, pcl::VFHSignature308> ce;
+	//pcl::registration::CorrespondenceEstimation<pcl::SHOT352, pcl::SHOT352> ce;
 	ce.setInputSource(descriptores);
 	ce.setInputTarget(descriptores_anteriores);
 	ce.determineCorrespondences(*correspondenciaEstimada);
 	std::cout << "Numero de correspondencias encontradas: " << correspondenciaEstimada->size() << std::endl;
 }
+
 
 Eigen::Matrix4f RANSAC(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &keypoints, pcl::CorrespondencesPtr mejorCorrespondencia){
 	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZRGB> crsc;
@@ -178,7 +239,7 @@ void ICP(){
     icp.setInputSource(nube_transformada);
     icp.setInputTarget(nube_filtrada_anterior);
 
-    icp.setMaxCorrespondenceDistance(0.1);
+    icp.setMaxCorrespondenceDistance(10);
     icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-8);
     icp.setEuclideanFitnessEpsilon(1);
@@ -191,7 +252,10 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr nube_filtrada(new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::Normal>::Ptr normales(new pcl::PointCloud<pcl::Normal>());
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints(new pcl::PointCloud<pcl::PointXYZRGB>());
+	//pcl::PointCloud<pcl::PFHSignature125>::Ptr descriptores(new pcl::PointCloud<pcl::PFHSignature125>());
 	pcl::PointCloud<pcl::FPFHSignature33>::Ptr descriptores(new pcl::PointCloud<pcl::FPFHSignature33>());
+	//pcl::PointCloud<pcl::VFHSignature308>::Ptr descriptores(new pcl::PointCloud<pcl::VFHSignature308>());
+	//pcl::PointCloud<pcl::SHOT352>::Ptr descriptores(new pcl::PointCloud<pcl::SHOT352>());
 
 	cout << "Puntos capturados: " << nube_capturada->size() << endl;
 
@@ -222,18 +286,29 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 
 	//Descriptores
 	start = std::chrono::high_resolution_clock::now();
+	//PFH_descriptors(nube_capturada, keypoints, descriptores);
 	FPFH_descriptors(nube_capturada, keypoints, descriptores);
+	//CVFH_descriptors(nube_capturada, keypoints, descriptores);
+	//SHOT_descriptors(nube_capturada, keypoints, descriptores);
 	end = std::chrono::high_resolution_clock::now();
 	duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 	std::cout << "Tiempo de ejecución descriptores: " << duration.count() / 1000.0 << " segundos" << std::endl;
 
 	//Matching, Ransac e ICP
 	if(!nube_filtrada_anterior->empty()){ //no podemos hacer matching con solo 1 nube, necesitamos 2
+		start = std::chrono::high_resolution_clock::now();
 		Matching(descriptores);
+		end = std::chrono::high_resolution_clock::now();
+		duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+		std::cout << "Tiempo de ejecución matching: " << duration.count() / 1000.0 << " segundos" << std::endl;
 
 		pcl::CorrespondencesPtr correspondencias(new pcl::Correspondences());
 
+		start = std::chrono::high_resolution_clock::now();
 		transformacion_actual = RANSAC(keypoints, correspondencias);
+		end = std::chrono::high_resolution_clock::now();
+		duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+		std::cout << "Tiempo de ejecución RANSAC: " << duration.count() / 1000.0 << " segundos" << std::endl;
 		transformacion_global = transformacion_actual * transformacion_global;
 
 		ICP();
